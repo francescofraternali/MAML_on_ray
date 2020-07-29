@@ -9,7 +9,8 @@ Implementing MAML using Ray to control IoT sensors
 - pip install gym
 - pip install psutil
 - pip install ray[tune]
-- pip install ray[rllib]==0.8.2
+- pip install ray[rllib]
+- pip install -U [link to wheel] # link for wheel for python3.7
 - pip install pandas
 - pip install matplotlib
 - pip install opencv-python
