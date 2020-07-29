@@ -2,8 +2,8 @@
 Implementing MAML using Ray to control IoT sensors
 
 # Installation
-Install conda using https://www.digitalocean.com/community/tutorials/how-to-install-anaconda-on-ubuntu-18-04-quickstart
-conda create --name maml python=3.6
+- Install conda using https://www.digitalocean.com/community/tutorials/how-to-install-anaconda-on-ubuntu-18-04-quickstart
+- conda create --name maml python=3.6
 conda activate maml
 pip install numpy
 pip install gym
