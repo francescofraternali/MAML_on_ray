@@ -1,12 +1,12 @@
 [
   {
-    "title": "2124_Middle_EH_FF96",
-    "file_light": "2124_Middle_EH_FF96.txt",
+    "title": "Test",
+    "file_light": "test_data.txt",
     "agent_saved_folder": "Agent_Saved",
     "training_iterations": 10,
-    "num_cores": "0",
+    "num_cores": "1",
     "light_divider": "1",
-    "train/test/real": "test",
+    "train/test/real": "train",
     "real_train_days": "0",
     "real_train_max": "30",
     "start_train": "07/28/20 00:00:00",
@@ -19,7 +19,7 @@
     "GT_mode": "1",
     "train_gt/rm_miss/inject": "0",
     "update_folder": "",
-    "bs_name": "pi@cse-wifi-bs2xxx.dynamic.ucsd.edu",
-    "pwd": "'$yn3rgYUUVXGY'"
+    "bs_name": "",
+    "pwd": ""
 }
 ]

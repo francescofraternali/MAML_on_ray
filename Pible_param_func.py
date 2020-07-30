@@ -20,7 +20,7 @@ SC_volt_min = 2.3; SC_volt_max = 5.5; SC_size = 1.5; SC_volt_die = 3.0
 # Board and Components Consumption
 #i_sleep = 0.0000032;
 #i_sens =  0.0003; time_sens = 0.2
-i_sens =  0.0006; time_sens = 0.13
+i_sens =  0.0004; time_sens = 0.2 # It was i_sens =  0.00067; time_sens = 0.13
 i_PIR_detect = 0.000102; time_PIR_detect = 2.5
 i_accel_sens = 0.0026; accel_sens_time = 0.27
 #i_sleep_PIR = i_sleep + 0.000001 # original
@@ -47,15 +47,15 @@ def Energy(SC_volt, light, PIR_or_thpl, PIR_on_off, thpl_on_off, next_wake_up_ti
     #print("in: ", SC_volt)
 
     if int(PIR_or_thpl) > 0:
-        i_sleep = 0.00000445;
+        i_sleep = 0.0000042; # it was i_sleep = 0.00000445
         time_BLE_comm = 12; num_sens = 3
         time_BLE_sens = time_wake_up_advertise + time_BLE_comm
     else:
-        time_BLE_comm = 4; num_sens = 0
+        time_BLE_comm = 5; num_sens = 1
         time_BLE_sens = time_wake_up_advertise + time_BLE_comm
-        i_sleep = 0.0000027;
+        i_sleep = 0.00000345;
 
-    i_sleep_PIR = i_sleep + 0.0000028
+    i_sleep_PIR = i_sleep + 0.000002 # it was 0.0000028
 
     if thpl_on_off == 1:
         temp_polling_min = 1
@@ -64,7 +64,7 @@ def Energy(SC_volt, light, PIR_or_thpl, PIR_on_off, thpl_on_off, next_wake_up_ti
 
     i_BLE_sens = ((i_wake_up_advertise * time_wake_up_advertise) + (i_BLE_comm * (time_BLE_comm)))/(time_wake_up_advertise + time_BLE_comm)
 
-    volt_regulator = SC_volt
+    volt_regulator = 3.0
     next_wake_up_time_sec = next_wake_up_time * 60 # in seconds
     temp_polling_sec = temp_polling_min * 60 # in seconds
 
@@ -92,11 +92,16 @@ def Energy(SC_volt, light, PIR_or_thpl, PIR_on_off, thpl_on_off, next_wake_up_ti
 
         # Energy Consumed by the node in sleep mode
         i_sl = i_sleep_PIR if PIR_on_off == 1 else i_sleep
-        if SC_volt > 5.2:
-            i_sl += 0.0000045
+        # increase energy leakeage y the supercapacitor
+        if SC_volt >= 5.15:
+            i_sl += 0.0000075
+        #i_sl += (SC_volt - SC_volt_die) * 0.000001
+
         Energy_Used += (time_sleep * volt_regulator * i_sl)
 
     Energy_Prod = next_wake_up_time_sec * p_solar_1_lux * light
+
+    #Energy_Prod = next_wake_up_time_sec * p_solar_1_lux * light
     #if light > 50:
     #    print(light, next_wake_up_time_sec)
     #    print(Energy_Prod, Energy_Used)
@@ -106,9 +111,18 @@ def Energy(SC_volt, light, PIR_or_thpl, PIR_on_off, thpl_on_off, next_wake_up_ti
 
     # Energy cannot be lower than 0
     #Energy_Rem = max(Energy_Rem - Energy_Used + Energy_Prod, 0)
-    Energy_Rem = Energy_Rem - Energy_Used + Energy_Prod
-
-    SC_volt = np.sqrt((Energy_Rem/SC_size)*2)
+    #Energy_Rem = Energy_Rem - Energy_Used + Energy_Prod
+    #Energy_Rem += Energy_Prod
+    #Energy_Rem -= 0.15
+    i_diff_used = Energy_Used/(volt_regulator * next_wake_up_time_sec)
+    i_diff_prod = Energy_Prod/(SC_volt * next_wake_up_time_sec)
+    #i_diff_prod = (i_solar_200_lux/200) * light
+    #SC_volt_used = np.sqrt((0.15/SC_size)*2)
+    #SC_volt -= SC_volt_used
+    #SC_volt = np.sqrt((Energy_Rem/SC_size)*2)
+    #SC_volt = np.sqrt((Energy_Rem/SC_size)*2)
+    SC_volt -= ((next_wake_up_time_sec*i_diff_used)/SC_size)
+    SC_volt += ((next_wake_up_time_sec*i_diff_prod)/SC_size)
 
     # Setting Boundaries for Voltage
 
@@ -117,7 +131,27 @@ def Energy(SC_volt, light, PIR_or_thpl, PIR_on_off, thpl_on_off, next_wake_up_ti
     if SC_volt < SC_volt_min:
         SC_volt = np.array([SC_volt_min])
     #print("ou: ", SC_volt)
+
     return SC_volt, Energy_Prod, Energy_Used
+
+def Energy_test(SC_volt):
+
+    #E_1 = SC_volt * SC_volt * 0.5 * 1.5
+
+    #E_2 = E_1 - 0.156693
+    #Bt(seconds) = [C(Vcapmax - Vcapmin)/Imax]
+    SC_volt = SC_volt - ((3600*0.0000047)/SC_size)
+    #print(((3600*0.0000047)/SC_size), SC_volt)
+    #exit()
+    #DS = np.sqrt((E_2/1.5)*2) - np.sqrt((E_1/1.5)*2)
+    #print(DS)
+    #exit()
+    #SC_volt_rem = np.sqrt((0.156693/1.5)*2)
+    #SC_volt = SC_volt - 0.019
+
+    #SC_volt += DS
+
+    return SC_volt, 0, 0
 
 
 def light_event_func_new(t_now, next_wake_up_time, mode, PIR_on_off, PIR_events_found_dict, light_prev, light_div, file_data, data_pointer): # check how many events are on this laps of time
@@ -231,16 +265,16 @@ def plot_hist_low_level(data, tot_rew, title, energy_used, accuracy):
     plt.plot(data["Time"], data["PIR_event_det"], 'k.', label = 'Detected', markersize = 15)
     plt.ylabel('PIR\nEvents\n[num]', fontsize=15)
     #plt.xlabel('Time [h]', fontsize=20)
-    plt.legend(loc="center left", prop={'size': 9})
+    plt.legend(loc="upper left", prop={'size': 9})
     ax2.set_xticklabels([])
     plt.grid(True)
 
     ax4 = plt.subplot(514)
     plt.plot(data["Time"], data["PIR_ON_OFF"], 'y.', label = 'RL Action', markersize = 15)
-    plt.plot(data["Time"], data["PIR_gt"], 'b.', label = 'GT Action', markersize = 15)
+    plt.plot(data["Time"], data["PIR_gt"], 'b.', label = 'SS Action', markersize = 15)
     plt.ylabel('PIR\nOn_Off\n[num]', fontsize=15)
     #plt.xlabel('Time [h]', fontsize=20)
-    plt.legend(loc=9, prop={'size': 9})
+    plt.legend(loc="center", prop={'size': 9})
     plt.ylim(0)
     ax4.set_xticklabels([])
     plt.grid(True)
@@ -284,17 +318,17 @@ def plot_hist_low_level(data, tot_rew, title, energy_used, accuracy):
     ax6 = plt.subplot(513)
     plt.plot(data["Time"], data["thpl_event_miss"], 'r.', label = 'Missed', markersize = 15)
     plt.plot(data["Time"], data["thpl_event_det"], 'k.', label = 'Detected', markersize = 15)
-    plt.ylabel('THPL\nevents\n[num]', fontsize=15)
-    plt.legend(loc="center left", prop={'size': 9})
+    plt.ylabel('THPL\nEvents\n[num]', fontsize=15)
+    plt.legend(loc="upper left", prop={'size': 9})
     ax6.set_xticklabels([])
     plt.grid(True)
 
     ax4 = plt.subplot(514); sub_p += 1
     plt.plot(data["Time"], data["THPL_ON_OFF"], 'y.', label = 'RL Action', markersize = 15)
-    plt.plot(data["Time"], data["THPL_gt"], 'b.', label = 'GT Action', markersize = 15)
+    plt.plot(data["Time"], data["THPL_gt"], 'b.', label = 'SS Action', markersize = 15)
     plt.ylabel('THPL\nOn_Off\n[num]', fontsize=15)
     #plt.xlabel('Time [h]', fontsize=20)
-    plt.legend(loc=9, prop={'size': 9})
+    plt.legend(loc="center", prop={'size': 9})
     plt.ylim(0)
     ax4.set_xticklabels([])
     plt.grid(True)
@@ -344,3 +378,81 @@ def plot_hist_low_level(data, tot_rew, title, energy_used, accuracy):
     plt.show()
     plt.close("all")
     '''
+
+def plot_all_PIR_THPL(data, tot_rew, title, energy_used, accuracy):
+
+    tot_subplot = 5; sub_p = 1
+
+    plt.figure(1)
+    ax1 = plt.subplot(711)
+    plt.title(('{2}. Tot Rew: {0}, Energy Used: {1}, Acc: {3}%').format(round(tot_rew, 5), round(energy_used, 5), title, accuracy))
+    #plt.title(title_final, fontsize = 17)
+    plt.plot(data["Time"], data["Light"], 'b-', label = 'Light', markersize = 15)
+    plt.ylabel('Light\n[lux]', fontsize=15)
+    #plt.legend(loc=9, prop={'size': 10})
+    #plt.ylim(0)
+    ax1.set_xticklabels([])
+    plt.grid(True)
+
+    ax3 = plt.subplot(712)
+    plt.plot(data["Time"], data["SC_Volt"], 'm.', label = 'SC Voltage', markersize = 10)
+    plt.ylabel('SC [V]\nVolt', fontsize=15)
+    #plt.legend(loc=9, prop={'size': 10})
+    #plt.ylim(2.3, 3.7)
+    plt.ylim(2.7, 5.6)
+    ax3.set_xticklabels([])
+    plt.grid(True)
+
+    ax2 = plt.subplot(713)
+    #plt.plot(Time, PIR, 'k.', label = 'PIR detection', markersize = 15)
+    #plt.plot(Time, PIR_miss, 'r.', Time, PIR_det, 'k.', label = 'PIR detection', markersize = 15, )
+    plt.plot(data["Time"], data["PIR_event_miss"], 'r.', label = 'Missed', markersize = 15)
+    plt.plot(data["Time"], data["PIR_event_det"], 'k.', label = 'Detected', markersize = 15)
+    plt.ylabel('PIR\nEvents\n[num]', fontsize=15)
+    #plt.xlabel('Time [h]', fontsize=20)
+    plt.legend(loc="upper left", prop={'size': 9})
+    ax2.set_xticklabels([])
+    plt.grid(True)
+
+    ax4 = plt.subplot(714)
+    plt.plot(data["Time"], data["PIR_ON_OFF"], 'y.', label = 'RL Action', markersize = 15)
+    plt.plot(data["Time"], data["PIR_gt"], 'b.', label = 'SS Action', markersize = 15)
+    plt.ylabel('PIR\nOn_Off\n[num]', fontsize=15)
+    #plt.xlabel('Time [h]', fontsize=20)
+    plt.legend(loc="center", prop={'size': 9})
+    plt.ylim(0)
+    ax4.set_xticklabels([])
+    plt.grid(True)
+
+    ax5 = plt.subplot(715)
+    plt.plot(data["Time"], data["thpl_event_miss"], 'r.', label = 'Missed', markersize = 15)
+    plt.plot(data["Time"], data["thpl_event_det"], 'k.', label = 'Detected', markersize = 15)
+    plt.ylabel('THPL\nEvents\n[num]', fontsize=15)
+    plt.legend(loc="upper left", prop={'size': 9})
+    ax5.set_xticklabels([])
+    plt.grid(True)
+
+    ax6 = plt.subplot(716); sub_p += 1
+    plt.plot(data["Time"], data["THPL_ON_OFF"], 'y.', label = 'RL Action', markersize = 15)
+    plt.plot(data["Time"], data["THPL_gt"], 'b.', label = 'SS Action', markersize = 15)
+    plt.ylabel('THPL\nOn_Off\n[num]', fontsize=15)
+    #plt.xlabel('Time [h]', fontsize=20)
+    plt.legend(loc="center", prop={'size': 9})
+    plt.ylim(0)
+    ax6.set_xticklabels([])
+    plt.grid(True)
+
+    ax7 = plt.subplot(717)
+    plt.plot(data["Time"], data["State_Trans"], 'g.', label = 'State Transition', markersize = 15)
+    plt.ylabel('State\nTrans\n[min]', fontsize=15)
+    plt.xlabel('Time [hours]', fontsize=15)
+    #plt.legend(loc=9, prop={'size': 10})
+    #plt.ylim(0)
+    #ax5.set_xticklabels([])
+    plt.grid(True)
+
+    #xfmt = mdates.DateFormatter('%m/%d %H')
+    xfmt = mdates.DateFormatter('%H')
+    ax7.xaxis.set_major_formatter(xfmt)
+    plt.show()
+    plt.close("all")

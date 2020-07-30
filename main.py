@@ -9,9 +9,9 @@ import ray
 from ray import tune
 from ray.tune import grid_search
 import json
-from Pible_param_func import *
-from Pible_class_low_level_agent import SimplePible
-import Ember_RL_func
+from pible_param_func import *
+from pible_class import SimplePible
+import RL_func
 import datetime
 import os
 import glob
@@ -19,6 +19,7 @@ from ray.rllib.agents import maml
 from ray.tune.registry import register_env
 import getpass
 import sys
+
 
 def test_and_print_results(agent_folder, iteration, start_date, end_date, title, curr_path, sc_volt_test, train_test_real, diff_days, GT_hour):
     train_test_real_orig = train_test_real
@@ -42,7 +43,7 @@ def test_and_print_results(agent_folder, iteration, start_date, end_date, title,
        "resume_from_iter": iteration,
     }
     if train_test_real == "real":
-        #Ember_RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
+        #RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
         fold = os.path.basename(os.getcwd())
         ID_temp = fold.split('_')[-1]
         action_file = ID_temp + "_action.json"
@@ -60,17 +61,27 @@ def test_and_print_results(agent_folder, iteration, start_date, end_date, title,
         )
 
         if train_test_real == "real":
-            learned_action = Ember_RL_func.correct_action(obs, learned_action)
-            Ember_RL_func.sync_action(action_file, learned_action, settings[0]["PIR_or_thpl"])
-            Ember_RL_func.sync_ID_file_to_BS(settings[0]["pwd"], settings[0]["bs_name"], action_file, "/home/pi/Base_Station_20/ID/")
+            learned_action = RL_func.correct_action(obs, learned_action)
+            RL_func.sync_action(action_file, learned_action, settings[0]["PIR_or_thpl"])
+            RL_func.sync_ID_file_to_BS(settings[0]["pwd"], settings[0]["bs_name"], action_file, "/home/pi/Base_Station_20/ID/")
             print("action_taken: ", learned_action)
             if isinstance(learned_action, list):
-                print("sleeping " + str(learned_action[0][1]) + " mins decided by RL")
-                sleep(int(learned_action[0][1]) * 60)
+                if len(learned_action) == 1:
+                    print("sleeping 60 mins fixed")
+                    sleep(60 * 60)
+                elif len(learned_action) == 2:
+                    print("len action is 2. sleeping 60 mins fixed")
+                    sleep(60 * 60)
+                #elif len(learned_action) > 2:
+                #    print("sleeping " + str(learned_action[0][2]) + " mins decided by RL")
+                #    sleep(int(learned_action[0][2]) * 60)
+                else:
+                    print("there is a problem. Check check")
+                    exit()
             else:
-                print("sleeping fixed " + str(60) + " mins")
+                print("sleeping fixed " + str(60) + " mins. Else case")
                 sleep(60 * 60)
-            Ember_RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
+            RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
 
         obs, reward, done, info = env.step(learned_action)
         print(obs)
@@ -91,20 +102,21 @@ def test_and_print_results(agent_folder, iteration, start_date, end_date, title,
     print("Energy Prod per day: ", energy_prod_tot/episode_lenght, "Energy Used: ", energy_used_tot/episode_lenght)
     print("Detected events averaged per day: ", (int(info["PIR_events_detect"]) +int(info["thpl_events_detect"]))/episode_lenght)
     print("Tot events averaged per day: ", (int(info["PIR_tot_events"]) +int(info["thpl_tot_events"]))/episode_lenght)
-    accuracy = Ember_RL_func.calc_accuracy(info)
+    accuracy = RL_func.calc_accuracy(info)
     print("Accuracy: ", accuracy)
 
-    if train_test_real_orig == "test": #or train_test_real_orig == "train":
+    if train_test_real_orig == "test" or train_test_real_orig == "train":
         env.render(tot_rew, title, energy_used_tot, accuracy)
 
     return path, info["SC_volt"], int(info["GT_hours_start"])
 
-def training_PPO(start_train_date, end_train_date, resume, diff_days):
+def training(start_train_date, end_train_date, resume, diff_days):
     config = maml.DEFAULT_CONFIG.copy()
     config["observation_filter"] = 'MeanStdFilter'
     config["batch_mode"] = "complete_episodes"
     config["lr"] = 1e-4
     config["num_workers"] = num_cores
+    #config["num_sgd_iter"] = 5 # default 30
     config["env_config"] = {
         "settings": settings,
         "main_path": curr_path,
@@ -136,7 +148,6 @@ def training_PPO(start_train_date, end_train_date, resume, diff_days):
         #    fcnet_hiddens: [64, 64]
         #    free_log_std: True
     #}
-
     trainer = maml.MAMLTrainer(config=config, env="simplePible")
 
     if resume_path != "":
@@ -160,17 +171,18 @@ def training_PPO(start_train_date, end_train_date, resume, diff_days):
 
             curr_res = float(result["episode_reward_mean"])
             #if (int(result["training_iteration"]) > 10) and prev_res != []:
-            if prev_res != [] and curr_res != 0.0:
+
+            if len(prev_res) >= 5 and curr_res != 0.0:
                 avg_res = sum(prev_res)/len(prev_res)
                 print(curr_res, avg_res)
                 diff_perc = (((curr_res - avg_res)/curr_res) * 100)
                 print("\nDiff Percentage: ", diff_perc)
-                if diff_perc < 5 and diff_perc > -5:
+                if diff_perc < 3 and diff_perc > -3:
                         print("Converged!")
                         sleep(2)
                         break
 
-            if len(prev_res) >= 4:
+            if len(prev_res) >= 5:
                 prev_res = np.roll(prev_res, 1)
                 prev_res[0] = curr_res
             else:
@@ -178,17 +190,15 @@ def training_PPO(start_train_date, end_train_date, resume, diff_days):
 
             #print(prev_res)
             #sleep(4)
-   # Remove previous agents and save bew agetn into Agents_Saved
+    # Remove previous agents and save bew agetn into Agents_Saved
     #print("out", parent_dir, save_agent_folder)
-
-    Ember_RL_func.rm_old_save_new_agent(parent_dir, save_agent_folder)
+    RL_func.rm_old_save_new_agent(parent_dir, save_agent_folder)
 
 
 
 if __name__ == "__main__":
 
-    print("Updating code...")
-    #Ember_RL_func.update_code()
+
     print("Starting RL Agent")
 
     register_env("simplePible", lambda config: SimplePible(config))
@@ -201,18 +211,25 @@ if __name__ == "__main__":
     with open('settings.json', 'r') as f:
         settings = json.load(f)
 
+    if "update_folder" in settings[0]:
+        update_folder_path = settings[0]["update_folder"]
+        RL_func.update_code(update_folder_path)
+    else:
+        print("Not updating code")
+        sleep(2)
+
     title = settings[0]["title"]
     train_test_real = settings[0]["train/test/real"]
     fold = settings[0]["agent_saved_folder"]
     num_cores = settings[0]["num_cores"]
 
     if settings[0]["train_gt/rm_miss/inject"] == '1' or settings[0]["train_gt/rm_miss/inject"] == '2':
-        Ember_RL_func.restore_orig_data(settings[0]["file_light"])
+        RL_func.restore_orig_data(settings[0]["file_light"])
 
     resume_path = ''
     prev_res = []
     if num_cores == "max":
-        num_cores = Ember_RL_func.cores_available()
+        num_cores = RL_func.cores_available()
     else:
         num_cores = int(num_cores)
 
@@ -231,7 +248,7 @@ if __name__ == "__main__":
         start_test_date = datetime.datetime.strptime(settings[0]["start_test"], '%m/%d/%y %H:%M:%S')
         end_test_date = datetime.datetime.strptime(settings[0]["end_test"], '%m/%d/%y %H:%M:%S')
     elif train_test_real == "real":
-        #Ember_RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
+        #RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
         now = datetime.datetime.now()
         start_train_date = now - datetime.timedelta(days=train_days)
         end_train_date = now
@@ -244,7 +261,7 @@ if __name__ == "__main__":
 
         if train_test_real == 'train' or train_test_real == 'real':
             print("\nStart Training: ", start_train_date, end_train_date)
-            #training_PPO(start_train_date, end_train_date, resume_path, diff_days)
+            training(start_train_date, end_train_date, resume_path, diff_days)
 
         #start_test = start_train
         #end_test = end_train
@@ -253,8 +270,8 @@ if __name__ == "__main__":
 
         # Find best checkpoint
         agent_fold = save_agent_folder + '/' + os.listdir(save_agent_folder)[0]
-        iteration = Ember_RL_func.find_best_checkpoint(agent_fold)
-        #folder, iteration = Ember_RL_func.find_agent_saved(save_agent_folder)
+        iteration = RL_func.find_best_checkpoint(agent_fold)
+        #folder, iteration = RL_func.find_agent_saved(save_agent_folder)
         #iteration = 30
         if train_test_real == "real":
             start_test_date = datetime.datetime.now()
@@ -265,7 +282,7 @@ if __name__ == "__main__":
         resume_path = resume_path[0]
 
         if train_test_real == 'real':
-            Ember_RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
+            RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
             now = datetime.datetime.now()
             train_days += 1
             if train_days > int(settings[0]["real_train_max"]):

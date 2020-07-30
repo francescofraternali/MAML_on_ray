@@ -3,9 +3,9 @@ import numpy as np
 from gym.spaces import Discrete, Box
 from gym import spaces, logger
 import datetime
-from Pible_param_func import *
-import Pible_param_func
-import Ember_RL_func
+from pible_param_func import *
+import pible_param_func
+import RL_func
 from time import sleep
 import os
 import pickle
@@ -42,11 +42,14 @@ class SimplePible(gym.Env):
         elif self.train == "test":
             self.start_data_date = config["start_test"]
             self.end_data_date = config["end_test"]
-            self.start_sc = float(config["sc_volt_start_test"])
+            if isinstance(config["sc_volt_start_test"], np.ndarray):
+                self.start_sc = config["sc_volt_start_test"]
+            else:
+                self.start_sc = float(config["sc_volt_start_test"])
         elif self.train == "real":
-            Ember_RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], file_light, "")
+            RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], file_light, "")
             #sleep(10)
-            #last_row = Ember_RL_func.last_valid_row(file_light)
+            #last_row = RL_func.last_valid_row(file_light)
             self.start_data_date = datetime.datetime.now()
             self.end_data_date = datetime.datetime.now() + datetime.timedelta(days=1)
 
@@ -58,12 +61,12 @@ class SimplePible(gym.Env):
         self.PIR_events_found_dict = []
 
         #print("Starting looking for data in between: ", self.start_data_date, self.end_data_date)
-        self.start_light_list, self.start_sc_volt_list, starter_data = Ember_RL_func.select_input_starter(self.path_light_data, self.start_data_date, num_light_input, num_sc_volt_input)
-        #print(starter_data)
-        if self.train == "test" and self.start_sc != '':
-            self.start_sc_volt_list = Ember_RL_func.adjust_sc_voltage(self.start_sc_volt_list, self.start_sc)
+        self.start_light_list, self.start_sc_volt_list, starter_data = RL_func.select_input_starter(self.path_light_data, self.start_data_date, num_light_input, num_sc_volt_input)
 
-        self.file_data = Ember_RL_func.select_input_data(self.path_light_data, self.start_data_date, self.end_data_date)
+        if self.train == "test" and self.start_sc != '':
+            self.start_sc_volt_list = RL_func.adjust_sc_voltage(self.start_sc_volt_list, self.start_sc)
+
+        self.file_data = RL_func.select_input_data(self.path_light_data, self.start_data_date, self.end_data_date)
         if self.train == 'test':
             if self.file_data == []:
                 print("\nInput data error or something else. Check!\n")
@@ -88,12 +91,12 @@ class SimplePible(gym.Env):
             self.action_space = spaces.Tuple((
                 spaces.Discrete(2), # PIR On_Off = 0 means PIR 0; PIR_onoff = 1 means PIR On
                 spaces.Discrete(2), # Sens_On Off same as PIR
-                spaces.Box(s_t_min_act, s_t_max_act, shape=(1, ), dtype=np.float32) # State Transition
+                #spaces.Box(s_t_min_act, s_t_max_act, shape=(1, ), dtype=np.float32) # State Transition
             ))
         else:
             self.action_space = spaces.Tuple((
                 spaces.Discrete(2),
-                spaces.Box(s_t_min_act, s_t_max_act, shape=(1, ), dtype=np.float32) # State Transition
+                #spaces.Box(s_t_min_act, s_t_max_act, shape=(1, ), dtype=np.float32) # State Transition
             ))
         #self.action_space = spaces.Discrete(2)
         if self.diff_days >= 7:
@@ -119,11 +122,11 @@ class SimplePible(gym.Env):
         self.PIR_event_det = []; self.PIR_event_miss = []; self.Len_Dict_Events = []; self.PIR_tot_events_detect = 0; self.thpl_tot_events = 0; self.thpl_tot_events_detect = 0; self.PIR_tot_events = 0;  self.mode = 0
         self.PIR_gt = []; self.THPL_gt = []
 
-        self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = Ember_RL_func.build_inputs(self.time, num_hours_input, num_minutes_input, self.start_light_list, self.start_sc_volt_list)
+        self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.build_inputs(self.time, num_hours_input, num_minutes_input, self.start_light_list, self.start_sc_volt_list)
 
         #if self.GT_mode == '1' and self.train != 'train':
         self.GT_hour_start = int(config["GT_hour_start"])
-        self.gt_hours = Ember_RL_func.gt_mode_hours((self.SC_Volt_array[0]/SC_volt_max)*100)
+        self.gt_hours = RL_func.gt_mode_hours((self.SC_Volt_array[0]/SC_volt_max)*100)
 
         # injecting problems
         self.hours_inj_prob = random.randint(0, 23)
@@ -137,11 +140,11 @@ class SimplePible(gym.Env):
             #print("reset time and light file accordingly")
             self.time = self.time_begin
             self.data_pointer = 0
-            self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = Ember_RL_func.build_inputs(self.time, num_hours_input, num_minutes_input, self.start_light_list, self.start_sc_volt_list)
-            self.SC_Volt_array = Ember_RL_func.add_random_volt(self.SC_Volt_array)
+            self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.build_inputs(self.time, num_hours_input, num_minutes_input, self.start_light_list, self.start_sc_volt_list)
+            self.SC_Volt_array = RL_func.add_random_volt(self.SC_Volt_array)
 
-            #self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = Ember_RL_func.build_inputs(self.time, self.light, self.start_sc, num_hours_input, num_minutes_input, last_light_list, last_volt_list)
-        self.week_end = Ember_RL_func.calc_week(self.time, num_week_input)
+            #self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.build_inputs(self.time, self.light, self.start_sc, num_hours_input, num_minutes_input, last_light_list, last_volt_list)
+        self.week_end = RL_func.calc_week(self.time, num_week_input)
         self.end = self.time + datetime.timedelta(hours=24*episode_lenght)
 
         if self.diff_days >= 7:
@@ -158,27 +161,27 @@ class SimplePible(gym.Env):
         elif len(action) == 2:
             action_0 = action[0]
             action_1 = action[1]
-        elif len(action) == 3:
-            action_0 = action[0]
-            action_1 = action[1]
-            action_2 = action[2]
+        #elif len(action) == 3:
+        #    action_0 = action[0]
+        #    action_1 = action[1]
+        #    action_2 = action[2]
 
         if self.rem_miss == '2' and self.train == 'test': # injecting problems
-            if self.time.hour >= self.hours_inj_prob and self.time.hour <= (self.hours_inj_prob + 1):
+            if self.time.hour >= self.hours_inj_prob and self.time.hour < (self.hours_inj_prob + 1):
                 action_0 = 0
-                if len(action) == 3:
+                if len(action) == 2:
                     action_1 = 0
                 #print("injecting problems from to: ", self.hours_inj_prob, self.hours_inj_prob + 1)
                 #sleep(10)
 
         PIR_gt = np.nan; THPL_gt = np.nan
         if self.GT_mode == '1' and self.train != 'train':
-            #self.gt_hours = Ember_RL_func.gt_mode_hours((self.SC_Volt_array[0]/SC_volt_max)*100)
+            #self.gt_hours = RL_func.gt_mode_hours((self.SC_Volt_array[0]/SC_volt_max)*100)
             print(self.time.hour, self.GT_hour_start, self.gt_hours, str(self.GT_hour_start + self.gt_hours))
             if self.time.hour >= self.GT_hour_start and self.time.hour < (self.GT_hour_start + self.gt_hours):
                 #if len(action) > 0:
                 action_0 = 1
-                if len(action) == 3:
+                if len(action) == 2:
                     action_1 = 1
 
                 if self.PIR_or_thpl == '2':
@@ -199,18 +202,18 @@ class SimplePible(gym.Env):
             self.PIR_on_off = action_0
             self.thpl_on_off = 0
 
-        if len(action) == 2:
-            self.next_wake_up_time  = int((s_t_max_new-s_t_min_new)/(s_t_max_act-s_t_min_act)*(action_1-s_t_max_act)+s_t_max_new)
-        elif len(action) == 3:
-            self.next_wake_up_time  = int((s_t_max_new-s_t_min_new)/(s_t_max_act-s_t_min_act)*(action_2-s_t_max_act)+s_t_max_new)
-        #self.next_wake_up_time = 60
+        #if len(action) == 2:
+        #    self.next_wake_up_time  = int((s_t_max_new-s_t_min_new)/(s_t_max_act-s_t_min_act)*(action_1-s_t_max_act)+s_t_max_new)
+        #elif len(action) == 3:
+        #    self.next_wake_up_time  = int((s_t_max_new-s_t_min_new)/(s_t_max_act-s_t_min_act)*(action_2-s_t_max_act)+s_t_max_new)
+        self.next_wake_up_time = 60
 
         self.time_next = self.time + datetime.timedelta(minutes=self.next_wake_up_time) #next_wake_up_time # in min
 
         if self.train == 'real': # now it changes because data are collected with time
             print("looking for data in between: ", self.time, self.time_next)
-            #self.file_data = Ember_RL_func.select_input_data(self.path_light_data, self.start_data_date, self.end_data_date)
-            self.file_data = Ember_RL_func.select_input_data(self.path_light_data, self.time, self.time_next)
+            #self.file_data = RL_func.select_input_data(self.path_light_data, self.start_data_date, self.end_data_date)
+            self.file_data = RL_func.select_input_data(self.path_light_data, self.time, self.time_next)
             print("self.file_data: ")
             for data in self.file_data:
                 print(data)
@@ -219,7 +222,7 @@ class SimplePible(gym.Env):
         #    self.file_data = [self.last] + self.file_data
         #    self.last = self.file_data[-1]
 
-        #self.start_light_list, self.start_sc_volt_list, starter_data = Ember_RL_func.select_input_starter(self.path_light_data, start_data_date, num_light_input, num_sc_volt_input)
+        #self.start_light_list, self.start_sc_volt_list, starter_data = RL_func.select_input_starter(self.path_light_data, start_data_date, num_light_input, num_sc_volt_input)
         #print(start_light_list, start_sc_volt_list)
         #self.data_pointer = 0
         #for line in self.file_data:
@@ -229,7 +232,7 @@ class SimplePible(gym.Env):
         #print("last line found: ", self.last)
 
         #self.light, PIR_event_gt, PIR_events_found_dict, thpl_event_gt, self.data_pointer = light_event_func(self.time, self.time_next, self.mode, self.PIR_on_off, self.PIR_events_found_dict, self.light, self.light_div, self.file_data, self.data_pointer-1)
-        self.light, PIR_event_gt, PIR_events_found_dict, thpl_event_gt, self.data_pointer = Pible_param_func.light_event_func_new(self.time, self.time_next, self.mode, self.PIR_on_off,
+        self.light, PIR_event_gt, PIR_events_found_dict, thpl_event_gt, self.data_pointer = pible_param_func.light_event_func_new(self.time, self.time_next, self.mode, self.PIR_on_off,
                                                                                                                                   self.PIR_events_found_dict, self.light, self.light_div,
                                                                                                                                   self.file_data, self.data_pointer)
         if self.PIR_or_thpl == '0':
@@ -237,12 +240,12 @@ class SimplePible(gym.Env):
         elif self.PIR_or_thpl == '1':
             PIR_event_gt = 0
 
-        PIR_event_det, PIR_event_miss, thpl_event_det, thpl_event_miss = Pible_param_func.event_det_miss(PIR_event_gt, thpl_event_gt, self.PIR_on_off, self.thpl_on_off, self.SC_Volt_array)
+        PIR_event_det, PIR_event_miss, thpl_event_det, thpl_event_miss = pible_param_func.event_det_miss(PIR_event_gt, thpl_event_gt, self.PIR_on_off, self.thpl_on_off, self.SC_Volt_array)
 
         if self.train == "test" and (PIR_event_miss > 0 or thpl_event_miss > 0) and (self.rem_miss == '1' or self.rem_miss == '2'):
-            Ember_RL_func.remove_missed_data(self.time, self.time_next, self.path_light_data)
+            RL_func.remove_missed_data(self.time, self.time_next, self.path_light_data)
 
-        SC_temp, en_prod, en_used = Pible_param_func.Energy(self.SC_Volt_array[0], self.light, self.PIR_or_thpl, self.PIR_on_off, self.thpl_on_off, self.next_wake_up_time, PIR_event_det, thpl_event_det)
+        SC_temp, en_prod, en_used = pible_param_func.Energy(self.SC_Volt_array[0], self.light, self.PIR_or_thpl, self.PIR_on_off, self.thpl_on_off, self.next_wake_up_time, PIR_event_det, thpl_event_det)
 
         if self.train == 'real':
             if len(self.file_data) > 0:
@@ -269,9 +272,9 @@ class SimplePible(gym.Env):
 
         self.time = self.time_next
 
-        self.week_end = Ember_RL_func.calc_week(self.time, num_week_input)
+        self.week_end = RL_func.calc_week(self.time, num_week_input)
 
-        self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = Ember_RL_func.updates_arrays(self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array, self.time, self.light, SC_temp)
+        self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.updates_arrays(self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array, self.time, self.light, SC_temp)
 
         #print("after", self.hour_array, self.minute_array, self.SC_Volt_array)
         done = self.time >= self.end
@@ -285,7 +288,7 @@ class SimplePible(gym.Env):
         self.info["thpl_events_detect"] = self.thpl_tot_events_detect
         #info["death_days"] = self.death_days
         #info["death_min"] = self.death_min
-        self.info["SC_volt"] = SC_temp
+        self.info["SC_volt"] = self.SC_Volt_array
         self.info["state_transition"] = self.next_wake_up_time
         #self.info["GT_hours_start"] = 0 if (self.GT_hour_start + self.gt_hours) >= 24 else (self.GT_hour_start + self.gt_hours)
         self.info["GT_hours_start"] = 6 if (self.GT_hour_start + self.gt_hours) >= 21 else (self.GT_hour_start + self.gt_hours)
@@ -307,19 +310,20 @@ class SimplePible(gym.Env):
 
     def render(self, tot_rew, title, energy_used, accuracy):
         data = self.prepare_data()
-        Pible_param_func.plot_hist_low_level(data, tot_rew, title, energy_used, accuracy)
+        pible_param_func.plot_hist_low_level(data, tot_rew, title, energy_used, accuracy)
 
     def get_reward_low_level(self, en_prod, en_used, PIR_event_det, PIR_event_miss, thpl_event_det,
                    thpl_event_miss, PIR_on_off, thpl_on_off, SC_Volt_array):
-        reward = 0
-
+        reward = 0.0
         reward += 0.01 * (PIR_event_det + thpl_event_det)
+        #reward -= 0.01 * max((SC_Volt_array[1] - SC_Volt_array[0]), 0)
 
-        reward -= 0.01 * (PIR_event_miss + thpl_event_miss)
-
-        reward -= 0.1*en_used
-
+        #reward -= 0.01 * (PIR_event_miss + thpl_event_miss)
+        #print(reward)
+        #reward -= 0.1*en_used
         #if thpl_on_off == 1 and thpl_event_det == 0:
+        #    reward -= 0.001
+        #if PIR_on_off == 1 and PIR_event_det == 0:
         #    reward -= 0.001
 
         if SC_Volt_array[0] <= SC_volt_die:

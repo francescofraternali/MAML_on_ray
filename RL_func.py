@@ -1,4 +1,4 @@
-from Pible_param_func import *
+from pible_param_func import *
 import numpy as np
 import datetime
 from time import sleep
@@ -9,7 +9,6 @@ from subprocess import PIPE, Popen, call
 import random
 import multiprocessing
 import os
-import git
 
 #from training_pible import light_divider
 check_max = 5
@@ -422,19 +421,19 @@ def sync_action(file, action, pir_or_thpl): # Now Let's update the action to the
 
 def action_encode(action, pir_or_thpl): # Action_1 = PIR_onoff + State_transition; Action_2 = Sensing sensitivity
 
-    if len(action) == 3:
+    if len(action) == 2:
         PIR = int(action[0])
         thpl = int(action[1])
-        state_trans = int(action[2])
+        #state_trans = int(action[2])
     else:
         if pir_or_thpl == '0':
             PIR = action[0]; thpl = 0
         elif pir_or_thpl == '1':
             PIR = 0; thpl = action[0]
-        if len(action) == 2:
-            state_trans = int(action[1])
-        else:
-            state_trans = 60
+        #if len(action) == 2:
+        #    state_trans = int(action[1])
+        #else:
+        #    state_trans = 60
 
     if PIR == 0 and thpl == 0: # everything off
         Action_1 = '3C'; Action_2 = '01'
@@ -470,13 +469,16 @@ def add_random_volt(SC_Volt_array):
 
     return SC_Volt_array
 
-def adjust_sc_voltage(list, start_sc):
+def adjust_sc_voltage(old_list, start_sc):
+    if isinstance(start_sc, np.ndarray):
+        return start_sc
+
     new_list = []
-    for i in range(0, len(list)):
+    for i in range(0, len(old_list)):
         if i == 0:
             new_list.append(start_sc)
         else:
-            new_list.append(start_sc + (list[i] - list[0]))
+            new_list.append(start_sc + (old_list[i] - old_list[0]))
 
     for i in range(len(new_list)):
         new_list[i] = SC_volt_max if new_list[i] > SC_volt_max else new_list[i]
@@ -487,8 +489,10 @@ def adjust_sc_voltage(list, start_sc):
 def calc_accuracy(info):
     accuracy = 0
     if (int(info["PIR_events_detect"]) + int(info["thpl_events_detect"])) != 0 or (int(info["PIR_tot_events"]) + int(info["thpl_tot_events"])) != 0 :
-        accuracy = float((int(info["PIR_events_detect"]) + int(info["thpl_events_detect"]))/(int(info["PIR_tot_events"]) +int(info["thpl_tot_events"])))
+        accuracy = float((int(info["PIR_events_detect"]) + int(info["thpl_events_detect"]) -24 )/(int(info["PIR_tot_events"]) +int(info["thpl_tot_events"])-24))
         accuracy = accuracy * 100
+    if (int(info["PIR_tot_events"]) + int(info["thpl_tot_events"])) == 0:
+        accuracy = 100
 
     return round(accuracy, 1)
 
@@ -496,9 +500,9 @@ def correct_action(obs, action):
     for elem in obs[2]:
         if elem <= SC_volt_die:
             if len(action) == 2:
-                action = [0, action[1]]
-            elif len(action)  == 3:
-                action = [0, 0, action[2]]
+                action = [0, 0]
+            #elif len(action)  == 3:
+            #    action = [0, 0, action[2]]
             else:
                 action = [0]
             print("Node dying. Action imposed to: ", action)
@@ -508,25 +512,25 @@ def correct_action(obs, action):
 
 def restore_orig_data(file):
     file_bkp = file.replace(".txt", "_bkp.txt")
+    proc = subprocess.call("rm " + file, stdout=subprocess.PIPE, shell=True)
+    sleep(2)
     proc = subprocess.Popen("cp " + file_bkp + ' ' + file, stdout=subprocess.PIPE, shell=True)
     (out, err) = proc.communicate()
     print("Copy bkp file Done")
     sleep(0.5)
 
-def update_code():
-    '''
-    path = os.getcwd()
-    take_from = "../Ember_Code/"
-    proc = subprocess.Popen("cp " + take_from + "Main_low_level_agent.py .", shell=True)
-    (out, err) = proc.communicate()
-    proc = subprocess.Popen("cp " + take_from + "Pible_class_low_level_agent.py .", shell=True)
-    (out, err) = proc.communicate()
-    proc = subprocess.Popen("cp " + take_from + "Ember_RL_func.py .", shell=True)
-    (out, err) = proc.communicate()
-    proc = subprocess.Popen("cp " + take_from + "Pible_param_func.py .", shell=True)
-    (out, err) = proc.communicate()
-    '''
-    g = git.cmd.Git(git_dir)
-    g.pull()
-    print("Code updated")
-    sleep(1)
+def update_code(update_folder_path):
+    if update_folder_path != '':
+        path = os.getcwd()
+        take_from = update_folder_path
+        proc = subprocess.Popen("cp " + take_from + "* .", shell=True)
+        (out, err) = proc.communicate()
+        '''
+        g = git.cmd.Git(path)
+        g.pull()
+        '''
+        print("Code updated")
+    else:
+        print("Code not updated")
+
+    sleep(2)
