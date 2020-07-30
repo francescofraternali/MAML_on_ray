@@ -19,4 +19,5 @@ Implementing MAML using Ray to control IoT sensors
 - pip install setproctitle
 - pip install tensorflow
 - git clone https://github.com/francescofraternali/MAML_on_ray.git
+- run main.py
 - Enjoy!
