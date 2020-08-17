@@ -3,7 +3,7 @@
     "title": "Test",
     "file_light": "train_data_1.txt",
     "agent_saved_folder": "Agent_Saved",
-    "training_iterations": 100,
+    "training_iterations": 500,
     "num_cores": "max",
     "light_divider": "1",
     "train/test/real": "train",
