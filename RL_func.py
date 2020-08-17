@@ -103,18 +103,18 @@ def select_input_starter(path_light_data, start_data_date, num_light_input, num_
 def build_inputs(time, num_hours_input, num_minutes_input, last_light_list, last_volt_list):
     list = []
     for i in range(0, num_hours_input):
-        #value = time - datetime.timedelta(hours=1)
-        list.append(time.hour)
-        time = time - datetime.timedelta(hours=1)
-        #list.append(value.hour)
+        if i == time.hour:
+            list.append(1)
+        else:
+            list.append(0)
     hour_array = np.array(list)
 
     list = []
     for i in range(0, num_minutes_input):
-        #value = time - datetime.timedelta(minutes=1)
-        list.append(time.minute)
-        time = time - datetime.timedelta(minutes=1)
-        #list.append(value.minute)
+        if i == time.minute:
+            list.append(1)
+        else:
+            list.append(0)
     minute_array = np.array(list)
 
     light_array = np.array(last_light_list)
@@ -145,26 +145,20 @@ def remove_missed_data(t_now, t_next, path_light_data):
             f.write('%s' % line)
 
 def updates_arrays(hour_array, minute_array, light_array, SC_Volt_array, time, light, SC_temp):
-    #hour_array = np.roll(hour_array, 1)
-    #hour_array[0] = time.hour
-
-    #minute_array = np.roll(minute_array, 1)
-    #minute_array[0] = time.minute
-
     list = []
-    for i in range(0, 24):
-        #value = time - datetime.timedelta(hours=1)
-        list.append(time.hour)
-        time = time - datetime.timedelta(hours=1)
-        #list.append(value.hour)
+    for i in range(0, len(hour_array)):
+        if i == time.hour:
+            list.append(1)
+        else:
+            list.append(0)
     hour_array = np.array(list)
 
     list = []
-    for i in range(0, 60):
-        list.append(time.minute)
-        #value = time - datetime.timedelta(minutes=1)
-        time = time - datetime.timedelta(minutes=1)
-        #list.append(value.minute)
+    for i in range(0, len(minute_array)):
+        if i == time.minute:
+            list.append(1)
+        else:
+            list.append(0)
     minute_array = np.array(list)
 
     light_array = np.roll(light_array, 1)
@@ -187,7 +181,7 @@ def calc_week(time, num_week_input):
     #print(week_ar)
     return week_ar
 
-
+'''
 def find_agent_saved(path):
     Agnt = 'PPO'
     # Detect latest folder for trainer to resume
@@ -261,29 +255,9 @@ def find_agent_saved(path):
     print("Best checkpoint found:", iteration, ". Mean Reward Episode: ", round(max_mean, 3), ". Min Rew Episode", round(dict['episode_reward_min'], 3))
 
     return folder, iteration
+'''
 
 
-def find_last_checkpoint(path, parent_dir):
-    folder = parent_dir
-
-    # detect checkpoint to resume
-    proc = subprocess.Popen("ls " + parent_dir, stdout=subprocess.PIPE, shell=True)
-    (out, err) = proc.communicate()
-    #print(out)
-    out = out.decode()
-    spl = out.strip().split('\n')
-    max = 0
-    for i in spl:
-        tester = i.split('_')
-        #print(tester, len(tester), tester[1].isdigit())
-        if "checkpoint" in tester and len(tester)==2 and tester[1].isdigit():
-            if int(tester[1]) > max:
-                max = int(tester[1])
-                iteration = i
-    iteration = max
-    print("\nFound folder: ", folder, "Last checkpoint found: ", iteration)
-
-    return folder, iteration
 
 def find_best_checkpoint(path):  # Find best checkpoint
 
@@ -313,14 +287,16 @@ def rm_old_save_new_agent(parent_dir, save_agent_folder):
         (out, err) = proc.communicate()
         sleep(0.5)
     # Save new Agent into Agents_Saved
-    proc = subprocess.Popen("mv " + parent_dir + " " + save_agent_folder + '/', stdout=subprocess.PIPE, shell=True)
+    proc = subprocess.Popen("cp -r " + parent_dir + " " + save_agent_folder + '/', stdout=subprocess.PIPE, shell=True)
     sleep(0.5)
     # Remove file from original folder parent_dir
+    '''
     for i in range(2):
         proc = subprocess.Popen("rm -r " + parent_dir, stdout=subprocess.PIPE, shell=True)
         (out, err) = proc.communicate()
         sleep(0.5)
     sleep(0.5)
+    '''
 
 def cores_available(): # Find number of cores available in the running system
     print("Number of cores available: ", multiprocessing.cpu_count())
@@ -459,7 +435,7 @@ def add_random_volt(SC_Volt_array):
     v_min = round(SC_Volt_array[0] - SC_volt_die - 0.1, 1)
     v_max = round(SC_volt_max - SC_Volt_array[0] - 0.1, 1)
     #print(-v_min, v_max)
-    k = round(random.uniform(-v_min, v_max), 1)
+    k = round(random.uniform(-v_min, v_max), 1) # it was v_max
     #print("before ", SC_Volt_array)
     SC_Volt_array = [round(x + k , 2) for x in SC_Volt_array]
     for i in range(len(SC_Volt_array)):
@@ -489,7 +465,7 @@ def adjust_sc_voltage(old_list, start_sc):
 def calc_accuracy(info):
     accuracy = 0
     if (int(info["PIR_events_detect"]) + int(info["thpl_events_detect"])) != 0 or (int(info["PIR_tot_events"]) + int(info["thpl_tot_events"])) != 0 :
-        accuracy = float((int(info["PIR_events_detect"]) + int(info["thpl_events_detect"]) -24 )/(int(info["PIR_tot_events"]) +int(info["thpl_tot_events"])-24))
+        accuracy = float((int(info["PIR_events_detect"]) + int(info["thpl_events_detect"]) -0 )/(int(info["PIR_tot_events"]) +int(info["thpl_tot_events"])-0))
         accuracy = accuracy * 100
     if (int(info["PIR_tot_events"]) + int(info["thpl_tot_events"])) == 0:
         accuracy = 100

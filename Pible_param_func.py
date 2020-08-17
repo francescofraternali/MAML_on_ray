@@ -188,7 +188,7 @@ def light_event_func_new(t_now, next_wake_up_time, mode, PIR_on_off, PIR_events_
                 light_buff.append(light_t)
                 PIR = int(line_split[6])
                 PIR_event_gt += PIR
-
+                #print(int(line_split[4]))
                 if PIR == 0 and no_event == 0 and hold != 0:
                     thpl_event_gt += 1
 
@@ -319,7 +319,7 @@ def plot_hist_low_level(data, tot_rew, title, energy_used, accuracy):
     plt.plot(data["Time"], data["thpl_event_miss"], 'r.', label = 'Missed', markersize = 15)
     plt.plot(data["Time"], data["thpl_event_det"], 'k.', label = 'Detected', markersize = 15)
     plt.ylabel('THPL\nEvents\n[num]', fontsize=15)
-    plt.legend(loc="upper left", prop={'size': 9})
+    plt.legend(loc="upper left", prop={'size': 10})
     ax6.set_xticklabels([])
     plt.grid(True)
 
@@ -328,7 +328,7 @@ def plot_hist_low_level(data, tot_rew, title, energy_used, accuracy):
     plt.plot(data["Time"], data["THPL_gt"], 'b.', label = 'SS Action', markersize = 15)
     plt.ylabel('THPL\nOn_Off\n[num]', fontsize=15)
     #plt.xlabel('Time [h]', fontsize=20)
-    plt.legend(loc="center", prop={'size': 9})
+    #plt.legend(loc="center", prop={'size': 10})
     plt.ylim(0)
     ax4.set_xticklabels([])
     plt.grid(True)
@@ -336,13 +336,13 @@ def plot_hist_low_level(data, tot_rew, title, energy_used, accuracy):
     ax5 = plt.subplot(515); sub_p += 1
     plt.plot(data["Time"], data["State_Trans"], 'g.', label = 'State Transition', markersize = 15)
     plt.ylabel('State\nTrans\n[min]', fontsize=15)
-    plt.xlabel('Time [h:m]', fontsize=15)
+    plt.xlabel('Time [h]', fontsize=15)
     #plt.legend(loc=9, prop={'size': 10})
     #plt.ylim(0)
     #ax5.set_xticklabels([])
     plt.grid(True)
 
-    xfmt = mdates.DateFormatter('%m/%d %H')
+    xfmt = mdates.DateFormatter('%H')
     ax5.xaxis.set_major_formatter(xfmt)
     plt.show()
     plt.close("all")

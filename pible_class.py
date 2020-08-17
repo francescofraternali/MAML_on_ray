@@ -61,9 +61,10 @@ class SimplePible(gym.Env):
         self.PIR_events_found_dict = []
 
         #print("Starting looking for data in between: ", self.start_data_date, self.end_data_date)
+
         self.start_light_list, self.start_sc_volt_list, starter_data = RL_func.select_input_starter(self.path_light_data, self.start_data_date, num_light_input, num_sc_volt_input)
 
-        if self.train == "test" and self.start_sc != '':
+        if self.start_sc != '': #and self.train == "test":
             self.start_sc_volt_list = RL_func.adjust_sc_voltage(self.start_sc_volt_list, self.start_sc)
 
         self.file_data = RL_func.select_input_data(self.path_light_data, self.start_data_date, self.end_data_date)
@@ -87,6 +88,7 @@ class SimplePible(gym.Env):
         #self.hum = float(line[3])
         #self.press = int(line[11])
 
+
         if self.PIR_or_thpl == '2':
             self.action_space = spaces.Tuple((
                 spaces.Discrete(2), # PIR On_Off = 0 means PIR 0; PIR_onoff = 1 means PIR On
@@ -98,29 +100,32 @@ class SimplePible(gym.Env):
                 spaces.Discrete(2),
                 #spaces.Box(s_t_min_act, s_t_max_act, shape=(1, ), dtype=np.float32) # State Transition
             ))
+
         #self.action_space = spaces.Discrete(2)
+
         if self.diff_days >= 7:
             self.observation_space = spaces.Tuple((
                 spaces.Box(0, 23, shape=(num_hours_input, ), dtype=np.float32),       # hours
                 #spaces.Box(0, 59, shape=(num_minutes_input, ), dtype=np.float32),       # hours
                 spaces.Box(0, light_max, shape=(num_light_input, ), dtype=np.float32),       # light
-                spaces.Box(SC_volt_min, SC_volt_max, shape=(num_sc_volt_input, ), dtype=np.float32),
+                spaces.Box(SC_volt_min, SC_volt_max, shape=(num_sc_volt_input, ), dtype=np.float16),
                 spaces.Box(0, 1, shape=(num_week_input, ), dtype=np.float32),  #week/weekends
                 #spaces.Box(0, 10, shape=(1, ), dtype=np.float32),  #number of events
             ))
         else:
             self.observation_space = spaces.Tuple((
-                spaces.Box(0, 23, shape=(num_hours_input, ), dtype=np.float32),       # hours
+                spaces.Box(0, 1, shape=(num_hours_input, ), dtype=np.bool_),      # hours
                 #spaces.Box(0, 59, shape=(num_minutes_input, ), dtype=np.float32),       # hours
-                spaces.Box(0, light_max, shape=(num_light_input, ), dtype=np.float32),       # light
+                #spaces.Box(0, light_max, shape=(num_light_input, ), dtype=np.float32),       # light
                 spaces.Box(SC_volt_min, SC_volt_max, shape=(num_sc_volt_input, ), dtype=np.float32),
-                #spaces.Box(0, 1, shape=(num_week_input, ), dtype=np.float32),  #week/weekends
+                #spaces.Box(0, 1, shape=(num_week_input, ), dtype=np.bool_),  #week/weekends
                 #spaces.Box(0, 10, shape=(1, ), dtype=np.float32),  #number of events
             ))
 
         self.Reward = []; self.Mode = []; self.Time = []; self.Light = []; self.PIR_ON_OFF= []; self.THPL_ON_OFF = []; self.SC_Volt = []; self.State_Trans = []; self.thpl_event_det = []; self.thpl_event_miss = []
         self.PIR_event_det = []; self.PIR_event_miss = []; self.Len_Dict_Events = []; self.PIR_tot_events_detect = 0; self.thpl_tot_events = 0; self.thpl_tot_events_detect = 0; self.PIR_tot_events = 0;  self.mode = 0
         self.PIR_gt = []; self.THPL_gt = []
+
 
         self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.build_inputs(self.time, num_hours_input, num_minutes_input, self.start_light_list, self.start_sc_volt_list)
 
@@ -132,9 +137,11 @@ class SimplePible(gym.Env):
         self.hours_inj_prob = random.randint(0, 23)
 
         self.info = {"config": config}
-        self.save_data()
+        #self.save_data()
 
     def reset(self):
+        #print("reset")
+        #sleep(1)
         #print(self.time)
         if self.time >= self.end_data_date and self.train == "train":
             #print("reset time and light file accordingly")
@@ -146,13 +153,17 @@ class SimplePible(gym.Env):
             #self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.build_inputs(self.time, self.light, self.start_sc, num_hours_input, num_minutes_input, last_light_list, last_volt_list)
         self.week_end = RL_func.calc_week(self.time, num_week_input)
         self.end = self.time + datetime.timedelta(hours=24*episode_lenght)
-
+        #print(self.SC_Volt_array)
+        #sleep(5)
         if self.diff_days >= 7:
             return self.hour_array, self.light_array, self.SC_Volt_array, self.week_end
         else:
-            return self.hour_array, self.light_array, self.SC_Volt_array
+            return self.hour_array, self.SC_Volt_array
 
     def step(self, action):
+        #print("step")
+        #sleep(0.1)
+        #print(self.hour_array, self.SC_Volt_array)
         #print("action ", action)
         #action = [1, 0.5]
         #if isinstance(action, list):
@@ -278,7 +289,9 @@ class SimplePible(gym.Env):
 
         #print("after", self.hour_array, self.minute_array, self.SC_Volt_array)
         done = self.time >= self.end
-        #done = True
+        #if done:
+        #    print("Done")
+        #    sleep(0.1)
 
         self.info["energy_used"] = en_used
         self.info["energy_prod"] = en_prod
@@ -306,7 +319,7 @@ class SimplePible(gym.Env):
         if self.diff_days >= 7:
             return (self.hour_array, self.light_array, self.SC_Volt_array, self.week_end), reward, done, self.info
         else:
-            return (self.hour_array, self.light_array, self.SC_Volt_array), reward, done, self.info
+            return (self.hour_array, self.SC_Volt_array), reward, done, self.info
 
     def render(self, tot_rew, title, energy_used, accuracy):
         data = self.prepare_data()
@@ -356,19 +369,73 @@ class SimplePible(gym.Env):
         return data
 
     def sample_tasks(self, n_tasks):
-        # Mass is a random float between 0.5 and 2
-        return np.random.uniform(low=0.5, high=2.0, size=(n_tasks, ))
+        # Select an data trace from 0 to n_tasks
+        #print("n_tasks: ", n_tasks)
+        generated = np.random.randint(low=0, high=3, size=(n_tasks, ))
+        #print("generated: ", generated)
+        #sleep(3)
+        return generated
 
     def set_task(self, task):
         """
         Args:
             task: task of the meta-learning environment
         """
-        self.m = task
+
+        #print("set task: ", task)
+        if task == 0:
+            file_light = "train_data_1.txt"
+            #file_light = "2106_Middle_BattEH_FF22.txt"
+        elif task == 1:
+            file_light = "train_data_2.txt"
+            #file_light = "2140_Door_Batt_FF16.txt"
+        elif task == 2:
+            file_light = "train_data_3.txt"
+            #file_light = "2142_Middle_BattEH_FF18.txt"
+        #elif task == 3:
+        #    file_light = "2154_StairsWin_BattEH_FF15.txt"
+        else:
+            print("huston we have a problem")
+            print("task: ", task)
+            sleep(1000)
+
+        self.path_light_data = self.config["main_path"] + "/" + file_light
+        self.start_light_list, self.start_sc_volt_list, starter_data = RL_func.select_input_starter(self.path_light_data, self.start_data_date, num_light_input, num_sc_volt_input)
+
+        if self.start_sc != '': #self.train == "test" and
+            self.start_sc_volt_list = RL_func.adjust_sc_voltage(self.start_sc_volt_list, self.start_sc)
+
+        self.file_data = RL_func.select_input_data(self.path_light_data, self.start_data_date, self.end_data_date)
+        if self.train == 'test':
+            if self.file_data == []:
+                print("\nInput data error or something else. Check!\n")
+                exit()
+        self.last = starter_data[0]
+        splitt = self.last.split('|')
+        self.light = int(int(splitt[8])/self.light_div)
+
+        self.hour_array, self.minute_array, self.light_array, self.SC_Volt_array = RL_func.build_inputs(self.time, num_hours_input, num_minutes_input, self.start_light_list, self.start_sc_volt_list)
+
+        #self.time = self.time_begin
+        #self.data_pointer = 0
+        self.SC_Volt_array = RL_func.add_random_volt(self.SC_Volt_array)
+
+        self.GT_hour_start = int(self.config["GT_hour_start"])
+        self.gt_hours = RL_func.gt_mode_hours((self.SC_Volt_array[0]/SC_volt_max)*100)
+
+        # injecting problems
+        self.hours_inj_prob = random.randint(0, 23)
+
+        self.info["file_light"] = file_light
+
+        #sleep(3)
+        #self.m = task
 
     def get_task(self):
         """
         Returns:
             task: task of the meta-learning environment
         """
-        return self.m
+        print("get task")
+        sleep(10)
+        return self.path_light_data

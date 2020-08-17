@@ -1,10 +1,10 @@
 [
   {
     "title": "Test",
-    "file_light": "test_data.txt",
+    "file_light": "train_data_1.txt",
     "agent_saved_folder": "Agent_Saved",
-    "training_iterations": 10,
-    "num_cores": "1",
+    "training_iterations": 100,
+    "num_cores": "max",
     "light_divider": "1",
     "train/test/real": "train",
     "real_train_days": "0",
@@ -16,7 +16,7 @@
     "sc_volt_start_train": "3.2",
     "sc_volt_start_test": "3.2",
     "PIR_or_thpl": "1",
-    "GT_mode": "1",
+    "GT_mode": "0",
     "train_gt/rm_miss/inject": "0",
     "update_folder": "",
     "bs_name": "",

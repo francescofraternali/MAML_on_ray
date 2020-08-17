@@ -8,6 +8,9 @@ from ray.tune.logger import pretty_print
 import ray
 from ray import tune
 from ray.tune import grid_search
+from ray.tune import Trainable, run
+from ray.tune.schedulers import PopulationBasedTraining
+
 import json
 from pible_param_func import *
 from pible_class import SimplePible
@@ -16,6 +19,7 @@ import datetime
 import os
 import glob
 from ray.rllib.agents import maml
+from ray.rllib.agents import ppo
 from ray.tune.registry import register_env
 import getpass
 import sys
@@ -42,50 +46,44 @@ def test_and_print_results(agent_folder, iteration, start_date, end_date, title,
        "GT_hour_start": GT_hour,
        "resume_from_iter": iteration,
     }
-    if train_test_real == "real":
-        #RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
-        fold = os.path.basename(os.getcwd())
-        ID_temp = fold.split('_')[-1]
-        action_file = ID_temp + "_action.json"
+    config["horizon"] = 24 # i.e. the number of steps in an episode: for a day we have 24 steps per day
+    config["rollout_fragment_length"] = 240 #200
+    #config["num_envs_per_worker"] = 5
+    config["inner_adaptation_steps"] = 1 # Number of Inner adaptation steps for the MAML algorithm
+    config["maml_optimizer_steps"] = 1 # Number of MAML steps per meta-update iteration (PPO steps)
+    config["inner_lr"] = 1e-4 # Inner Adaptation Step size
+    #config["num_sgd_iter"] = 5 # Number of SGD iterations in each outer loop. default 30
+    #    "gamma": 0.99,
+    #    "lambda": 1.0,
+    #    "lr": 0.001,
+    #    "vf_loss_coeff": 0.5,
+    #    "clip_param": 0.3,
+    #    "kl_target": 0.01,
+    #    "kl_coeff": 0.0005,
+    #config["num_workers"] = 1
+    #config["inner_lr"] = 0.01 # Inner Adaptation Step size
+    #config["lr"] = 1e-4 # Stepsize of SGD
+    #config["clip_actions"] = False
+    #config["model"] = {
+    #    "fcnet_hiddens": [64, 64],
+    #    "free_log_std": True,
+    #    "fcnet_activation": "tanh",
+    #}
 
     agent = maml.MAMLTrainer(config=config, env="simplePible")
     agent.restore(path[0])
     env = SimplePible(config["env_config"])
+    #env.set_task(0)
     obs = env.reset()
     tot_rew = 0;  energy_used_tot = 0;  energy_prod_tot = 0
     print("initial observations: ", obs)
     while True:
-
         learned_action = agent.compute_action(
                 observation = obs,
         )
-
-        if train_test_real == "real":
-            learned_action = RL_func.correct_action(obs, learned_action)
-            RL_func.sync_action(action_file, learned_action, settings[0]["PIR_or_thpl"])
-            RL_func.sync_ID_file_to_BS(settings[0]["pwd"], settings[0]["bs_name"], action_file, "/home/pi/Base_Station_20/ID/")
-            print("action_taken: ", learned_action)
-            if isinstance(learned_action, list):
-                if len(learned_action) == 1:
-                    print("sleeping 60 mins fixed")
-                    sleep(60 * 60)
-                elif len(learned_action) == 2:
-                    print("len action is 2. sleeping 60 mins fixed")
-                    sleep(60 * 60)
-                #elif len(learned_action) > 2:
-                #    print("sleeping " + str(learned_action[0][2]) + " mins decided by RL")
-                #    sleep(int(learned_action[0][2]) * 60)
-                else:
-                    print("there is a problem. Check check")
-                    exit()
-            else:
-                print("sleeping fixed " + str(60) + " mins. Else case")
-                sleep(60 * 60)
-            RL_func.sync_input_data(settings[0]["pwd"], settings[0]["bs_name"], settings[0]["file_light"], "")
-
         obs, reward, done, info = env.step(learned_action)
-        print(obs)
-        print(learned_action, reward, info["thpl_tot_events"])
+        print("observations: ", obs)
+        print("action, rew, thapl_tot_events: ", learned_action, reward, info["thpl_tot_events"])
 
         energy_used_tot += float(info["energy_used"])
         energy_prod_tot += float(info["energy_prod"])
@@ -111,12 +109,12 @@ def test_and_print_results(agent_folder, iteration, start_date, end_date, title,
     return path, info["SC_volt"], int(info["GT_hours_start"])
 
 def training(start_train_date, end_train_date, resume, diff_days):
+
     config = maml.DEFAULT_CONFIG.copy()
     config["observation_filter"] = 'MeanStdFilter'
     config["batch_mode"] = "complete_episodes"
-    config["lr"] = 1e-4
     config["num_workers"] = num_cores
-    #config["num_sgd_iter"] = 5 # default 30
+    config["lr"] = 1e-4 # Stepsize of SGD
     config["env_config"] = {
         "settings": settings,
         "main_path": curr_path,
@@ -127,11 +125,13 @@ def training(start_train_date, end_train_date, resume, diff_days):
         "diff_days": diff_days,
         "GT_hour_start": 0,
     }
-    config["horizon"] = 200
-    config["rollout_fragment_length"] = 200
-    config["num_envs_per_worker"] = 2
-    config["inner_adaptation_steps"] = 2
-    config["maml_optimizer_steps"] = 5
+    #config["scheduler"] = pbt
+    config["horizon"] = 24 # i.e. the number of steps in an episode: for a day we have 24 steps per day
+    config["rollout_fragment_length"] = 240 #200 # Size of batches collected from each worker
+    #config["num_envs_per_worker"] = 5
+    config["inner_adaptation_steps"] = 1 # Number of Inner adaptation steps for the MAML algorithm
+    config["maml_optimizer_steps"] = 1 # Number of MAML steps per meta-update iteration (PPO steps)
+    #config["num_sgd_iter"] = 5 # Number of SGD iterations in each outer loop. default 30
     #    "gamma": 0.99,
     #    "lambda": 1.0,
     #    "lr": 0.001,
@@ -139,15 +139,22 @@ def training(start_train_date, end_train_date, resume, diff_days):
     #    "clip_param": 0.3,
     #    "kl_target": 0.01,
     #    "kl_coeff": 0.0005,
-    config["num_workers"] = 1
-    config["num_gpus"] = 0
-    config["inner_lr"] = 0.03
-    #    "explore": True,
-    #    "clip_actions": False,
+    config["inner_lr"] = 1e-4 # Inner Adaptation Step size
+
+    #config["explore"] = True
+    #config["clip_actions"] = False
+
+    #config["num_gpus"] = 0
+    #config["model"] = {
+    #    "fcnet_hiddens": [64, 64],
+    #    "free_log_std": True,
+    #    "fcnet_activation": "tanh",
+    #}
         #model:
         #    fcnet_hiddens: [64, 64]
         #    free_log_std: True
     #}
+
     trainer = maml.MAMLTrainer(config=config, env="simplePible")
 
     if resume_path != "":
@@ -159,7 +166,10 @@ def training(start_train_date, end_train_date, resume, diff_days):
     prev_res = []
 
     for i in range(0, int(settings[0]["training_iterations"])):
+        #print("before")
         result = trainer.train()
+        #print("after")
+        #sleep(3)
         print(pretty_print(result))
 
         if int(result["training_iteration"]) % 10 == 0:
@@ -171,7 +181,7 @@ def training(start_train_date, end_train_date, resume, diff_days):
 
             curr_res = float(result["episode_reward_mean"])
             #if (int(result["training_iteration"]) > 10) and prev_res != []:
-
+            '''
             if len(prev_res) >= 5 and curr_res != 0.0:
                 avg_res = sum(prev_res)/len(prev_res)
                 print(curr_res, avg_res)
@@ -187,7 +197,7 @@ def training(start_train_date, end_train_date, resume, diff_days):
                 prev_res[0] = curr_res
             else:
                 prev_res.append(curr_res)
-
+            '''
             #print(prev_res)
             #sleep(4)
     # Remove previous agents and save bew agetn into Agents_Saved
