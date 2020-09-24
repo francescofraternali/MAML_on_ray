@@ -7,6 +7,7 @@ Implementing MAML using Ray to control IoT sensors
 - conda activate maml
 - pip install numpy
 - pip install gym
+- sudo apt-get install gcc python3-dev
 - pip install psutil
 - pip install ray[tune]
 - pip install ray[rllib]
